@@ -1,0 +1,10 @@
+# Ignore dependencies
+node_modules/
+
+# Ignore environment files
+.env
+
+# Ignore logs and temp files
+npm-debug.log*
+.DS_Store
+.env.local
