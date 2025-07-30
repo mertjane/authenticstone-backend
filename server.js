@@ -16,7 +16,7 @@ const app = express();
 
 const corsOptions = {
   /* origin: 'http://localhost:5173', */ // Development URL
-  origin: 'https://5cf8dc29.authenticstone-frontend.pages.dev', // Production URL
+  origin: 'https://c8a257fd.authenticstone-frontend.pages.dev', // Production URL
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
