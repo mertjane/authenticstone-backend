@@ -88,12 +88,27 @@ router.post("/add", async (req, res) => {
           const variationMatch = actualVariationId === existingVariationId;
 
           // Check sample status match
-          const existingIsSample =
+          /* const existingIsSample =
             item.meta_data?.some(
               (meta) => meta.key === "_is_sample" && meta.value === true
+            ) || false; */
+
+          // Improved sample status check
+          const existingIsSample =
+            item.meta_data?.some(
+              (meta) =>
+                meta.key === "_is_sample" &&
+                (meta.value === true || meta.value === "1" || meta.value === 1)
             ) || false;
+
           const newIsSample = Boolean(is_sample);
           const sampleMatch = existingIsSample === newIsSample;
+
+          // Additional check for sample items - they should match exactly
+          if (newIsSample && existingIsSample) {
+            // For samples, we want exact matches on product_id and variation_id
+            return productMatch && variationMatch;
+          }
 
           console.log(`Checking item ${item.id}:`, {
             productMatch,
@@ -279,11 +294,17 @@ router.post("/add", async (req, res) => {
     const parsedM2Quantity =
       m2_quantity !== undefined ? parseFloat(m2_quantity) : undefined;
 
+    /* const isSample =
+      is_sample ||
+      (variation_id &&
+        (variation_id.toString().includes("free-sample") ||
+          variation_id.toString().includes("full-size-sample"))); */
     const isSample =
       is_sample ||
       (variation_id &&
         (variation_id.toString().includes("free-sample") ||
-          variation_id.toString().includes("full-size-sample")));
+          variation_id.toString().includes("full-size-sample") ||
+          req.body.sku?.includes("SAMPLE"))); // Add any other sample identifiers
 
     const lineItem = {
       product_id: actualProductId,
@@ -299,10 +320,23 @@ router.post("/add", async (req, res) => {
       });
     }
 
-    if (isSample) {
+    /* if (isSample) {
       lineItem.meta_data.push({
         key: "_is_sample",
         value: true,
+      });
+    } */
+    // Add sample metadata consistently
+    if (isSample) {
+      lineItem.meta_data.push({
+        key: "_is_sample",
+        value: "1", // Use consistent value (string "1" instead of boolean true)
+      });
+
+      // For samples, we might want to add additional identifying metadata
+      lineItem.meta_data.push({
+        key: "sample_type",
+        value: "free-sample", // or "full-size-sample" depending on your needs
       });
     }
 
@@ -389,7 +423,7 @@ router.put("/:itemId", async (req, res) => {
   }
 });
 
-// Update the get cart endpoint
+// Update the GET /cart endpoint
 router.get("/", async (req, res) => {
   try {
     const response = await api.get("orders", {
@@ -404,20 +438,29 @@ router.get("/", async (req, res) => {
     response.data.forEach((order) => {
       if (order.line_items && order.line_items.length > 0) {
         order.line_items.forEach((item) => {
-          const isSample =
-            item.meta_data.find((m) => m.key === "_is_sample")?.value === true;
-          const m2Quantity = item.meta_data.find(
-            (m) => m.key === "_m2_quantity"
-          )?.value;
+          // Robust sample detection
+          const isSample = item.meta_data.some(meta => 
+            (meta.key === "_is_sample" && 
+             (meta.value === true || meta.value === "1" || meta.value === 1)) ||
+            item.sku?.includes("SAMPLE") ||
+            item.name?.includes("Sample"))
 
-          // Calculate display quantity and price
-          let displayQuantity = isSample
-            ? item.quantity
-            : m2Quantity || item.quantity;
-          let displayPrice = item.price;
-          let totalPrice = isSample
-            ? item.price * item.quantity
-            : item.price * (m2Quantity || item.quantity);
+          // Safely get m2_quantity with proper fallbacks
+          const m2Meta = item.meta_data.find(m => m.key === "_m2_quantity");
+          const m2Quantity = m2Meta ? 
+            typeof m2Meta.value === 'string' ? 
+              parseFloat(m2Meta.value) : 
+              Number(m2Meta.value) :
+            0;
+
+          // Calculate display quantity
+          const displayQuantity = isSample ? item.quantity : m2Quantity || item.quantity;
+
+          // Calculate prices
+          const displayPrice = item.price;
+          const totalPrice = isSample ? 
+            item.price * item.quantity : 
+            item.price * (m2Quantity || item.quantity);
 
           processedItems.push({
             id: item.id,
@@ -427,6 +470,7 @@ router.get("/", async (req, res) => {
             display_quantity: displayQuantity,
             display_price: displayPrice,
             total: totalPrice.toFixed(2),
+            parent_name: item.name.split(' - ')[0] // Extract parent name if needed
           });
         });
       }
@@ -442,6 +486,7 @@ router.get("/", async (req, res) => {
   }
 });
 
+/* Delete item by ID */
 router.delete("/:itemId", async (req, res) => {
   try {
     const { itemId } = req.params;

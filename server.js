@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import pagesRouter from "./routes/pages.route.js"
 import cartRouter from "./routes/cart.route.js";
+import authRouter from "./routes/auth.route.js";
 import bodyParser from 'body-parser';
 import express from "express";
 import cors from "cors";
@@ -12,7 +13,17 @@ const WooCommerceRestApi =
   WooCommerceRestApiPkg.default || WooCommerceRestApiPkg;
 
 const app = express();
-app.use(cors());
+
+const corsOptions = {
+  origin: 'http://localhost:5173', // Your frontend URL
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
+
 
 // Middlewares
 app.use(bodyParser.json());
@@ -49,6 +60,7 @@ export const successResponse = (res, data, message = "Success", meta = {}) => {
 // routes
 app.use('/api/pages', pagesRouter);
 app.use('/api/cart', cartRouter); 
+app.use('/api/auth', authRouter); 
 
 /**
  * GET /api/products
@@ -302,6 +314,7 @@ app.get("/api/products/by-category", async (req, res) => {
       id: product.id,
       name: product.name,
       slug: product.slug,
+      type: product.type,
       permalink: product.permalink,
       date_created: product.date_created,
       date_created_gmt: product.date_created_gmt,
@@ -1245,7 +1258,20 @@ app.get("/api/filtered-products", async (req, res) => {
       slug: product.slug,
       permalink: product.permalink,
       date_created: product.date_created,
-      price: product.price,
+      price_html: (() => {
+        if (typeof product.price_html === "string") {
+          const match = product.price_html.match(
+            />(£|\$|&pound;)?\s*([\d.,]+)/
+          );
+          return match ? match[2] : "";
+        } else {
+          console.warn(
+            `Unexpected price_html value for product ${product.id}:`,
+            product.price_html
+          );
+        }
+        return "";
+      })(),
       regular_price: product.regular_price,
       sale_price: product.sale_price,
       stock_status: product.stock_status,
@@ -1375,14 +1401,6 @@ app.get("/api/clearance", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch clearance products" });
   }
 });
-
-/**
- * Get -> Add to basket
- */
-
-/**
- * Advance Filtering
- */
 
 app.listen(4000, () => {
   console.log("🚀 WooCommerce API server running at http://localhost:4000");

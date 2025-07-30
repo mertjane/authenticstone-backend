@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Account Deletion Confirmation - Authentic Stone</title>
+    <style>
+      /* Reset styles */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Arial", sans-serif;
+        line-height: 1.6;
+        color: #333;
+        background-color: #f4f4f4;
+      }
+
+      .email-container {
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .header {
+        background: white;
+        color: black;
+        padding: 30px 20px;
+        text-align: center;
+      }
+
+      .header img {
+        margin-bottom: 10px;
+        height: 50px;
+        width: 300px;
+        object-fit: contain;
+      }
+
+      .header p {
+        font-size: 16px;
+        opacity: 0.9;
+      }
+
+      .content {
+        padding: 40px 30px;
+      }
+
+      .greeting {
+        font-size: 20px;
+        margin-bottom: 20px;
+        color: #2c3e50;
+      }
+
+      .message {
+        font-size: 16px;
+        line-height: 1.8;
+        margin-bottom: 30px;
+        color: #555;
+      }
+
+      .button-container {
+        text-align: center;
+        margin: 30px 0;
+      }
+
+      .login-button {
+        display: inline-block;
+        background: #111111;
+        color: white !important;
+        padding: 15px 30px;
+        border-radius: 50px;
+        text-decoration: none;
+        font-weight: medium;
+        font-size: 16px;
+        transition: transform 0.2s ease;
+      }
+
+      .login-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(176, 57, 14, 0.6);
+      }
+
+      .security-note {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 5px;
+        padding: 15px;
+        margin: 25px 0;
+        font-size: 14px;
+        color: #856404;
+      }
+
+      .footer {
+        background-color: #f8f9fa;
+        padding: 25px 30px;
+        text-align: center;
+        border-top: 1px solid #e9ecef;
+      }
+
+      .footer p {
+        font-size: 14px;
+        color: #6c757d;
+        margin-bottom: 10px;
+      }
+
+      /* Responsive design */
+      @media only screen and (max-width: 600px) {
+        .email-container {
+          margin: 0;
+          border-radius: 0;
+        }
+
+        .content {
+          padding: 30px 20px;
+        }
+
+        .header {
+          background-color: #f8f9fa;
+          padding: 25px 20px;
+        }
+
+        .login-button {
+          padding: 12px 25px;
+          font-size: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      <div class="header">
+        <img src="cid:logo" alt="Authentic Stone" />
+      </div>
+
+      <div class="content">
+        <div class="greeting">Dear {{customerName}},</div>
+
+        <div class="message">
+          We’re confirming that your <strong>Authentic Stone</strong> account
+          has been permanently deleted. You will no longer have access to your
+          order history or saved details associated with this account.
+        </div>
+
+        <div class="button-container">
+          <a href="{{homeLink}}" class="login-button">Visit Our Store</a>
+        </div>
+
+        <div class="security-note">
+          <strong>Changed your mind?</strong> If you believe this deletion was a
+          mistake, please reach out to our support team as soon as possible so
+          we can assist you.
+        </div>
+      </div>
+
+      <div class="footer">
+        <p style="margin-top: 10px">
+          &copy; 2025 Authentic Stone. All rights reserved.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
