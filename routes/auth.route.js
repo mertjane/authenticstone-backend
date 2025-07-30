@@ -100,7 +100,7 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   // Set specific origin (not *) when using credentials
   /* res.header("Access-Control-Allow-Origin", "http://localhost:5173"); */ // frontend URL
-  res.header("Access-Control-Allow-Origin", "https://9626d4be.authenticstone-frontend.pages.dev"); // frontend URL
+  res.header("Access-Control-Allow-Origin", "https://c8f8f2c6.authenticstone-frontend.pages.dev"); // frontend URL
   res.header("Access-Control-Allow-Credentials", "true");
   res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
