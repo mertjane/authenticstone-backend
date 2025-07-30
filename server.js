@@ -15,8 +15,8 @@ const WooCommerceRestApi =
 const app = express();
 
 const corsOptions = {
-  /* origin: 'http://localhost:5173', */ // Development URL
-  origin: 'https://c973e22b.authenticstone-frontend.pages.dev', // Production URL
+  /* origin: 'http://localhost:5173', // Development URL */
+  origin: 'https://3c33f8a9.authenticstone-frontend.pages.dev', // Production URL
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
