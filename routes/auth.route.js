@@ -99,16 +99,19 @@ router.post("/register", async (req, res) => {
 // Login route
 router.post("/login", async (req, res) => {
   // Set specific origin (not *) when using credentials
-  /* res.header("Access-Control-Allow-Origin", "http://localhost:5173"); */ // frontend URL
+  /*
+  res.header("Access-Control-Allow-Origin", "http://localhost:5173");  // frontend URL
   res.header("Access-Control-Allow-Origin", "https://6ccc4c69.authenticstone-frontend.pages.dev"); // frontend URL
   res.header("Access-Control-Allow-Credentials", "true");
   res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
+ 
   // Handle OPTIONS preflight
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
+      */
   try {
     const { email, password } = req.body;
 
