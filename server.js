@@ -13,18 +13,18 @@ const WooCommerceRestApi =
   WooCommerceRestApiPkg.default || WooCommerceRestApiPkg;
 
 const app = express();
-/* 
+
 const corsOptions = {
   origin: 'http://localhost:5173', // Development URL 
-  origin: 'https://6ccc4c69.authenticstone-frontend.pages.dev', // Production URL
+  origin: 'https://d339c710.authenticstone-frontend.pages.dev', // Production URL
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 };
-*/
 
 
-const corsOptions = {
+
+/* const corsOptions = {
   origin: [
     'http://localhost:5173', // Development URL
     'https://d339c710.authenticstone-frontend.pages.dev', // Production URL
@@ -34,7 +34,7 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   optionsSuccessStatus: 200
-};
+}; */
 
 // Apply CORS middleware
 app.use(cors(corsOptions));
