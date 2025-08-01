@@ -25,7 +25,7 @@ const corsOptions = {
 const corsOptions = {
   origin: [
     'http://localhost:5173', // Development URL
-    'https://993382b5.authenticstone-frontend.pages.dev', // Production URL
+    'https://6fa3093c.authenticstone-frontend.pages.dev', // Production URL
     process.env.FRONTEND_URL // Use environment variable as fallback
   ].filter(Boolean), // Remove any undefined values
   credentials: true,
