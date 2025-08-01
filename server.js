@@ -25,7 +25,7 @@ const corsOptions = {
 const corsOptions = {
   origin: [
     'http://localhost:5173', // Development URL
-    'https://fe10193e.authenticstone-frontend.pages.dev', // Production URL
+    'https://993382b5.authenticstone-frontend.pages.dev', // Production URL
     process.env.FRONTEND_URL // Use environment variable as fallback
   ].filter(Boolean), // Remove any undefined values
   credentials: true,
@@ -1099,7 +1099,7 @@ app.get("/api/search", async (req, res) => {
       featured = "",
       on_sale = "",
       in_stock = "",
-      orderby = "relevance",
+      orderby = "date",
       order = "desc",
     } = req.query;
 
