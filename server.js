@@ -1,8 +1,13 @@
 import dotenv from "dotenv";
-import pagesRouter from "./routes/pages.route.js"
+import pagesRouter from "./routes/pages.route.js";
 import cartRouter from "./routes/cart.route.js";
 import authRouter from "./routes/auth.route.js";
-import bodyParser from 'body-parser';
+import sortRouter from "./routes/sort.route.js";
+import searchRouter from "./routes/search.route.js";
+import filterRouter from "./routes/filters.route.js";
+
+import bodyParser from "body-parser";
+import session from "express-session";
 import express from "express";
 import cors from "cors";
 import WooCommerceRestApiPkg from "@woocommerce/woocommerce-rest-api";
@@ -16,19 +21,34 @@ const app = express();
 
 const corsOptions = {
   origin: [
-    /* 'http://localhost:5173', */ // Development URL
+    /* "http://localhost:5173", */ // Development URL
     'https://a6726e9a.authenticstone-frontend.pages.dev', // Production URL
-    process.env.FRONTEND_URL // Use environment variable as fallback
+    process.env.FRONTEND_URL, // Use environment variable as fallback
   ].filter(Boolean), // Remove any undefined values
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  optionsSuccessStatus: 200
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  optionsSuccessStatus: 200,
 };
 
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
+// Session configuration (using memory store - no database needed)
+app.use(
+  session({
+    secret:
+      process.env.SESSION_SECRET || "your-secret-key-change-in-production",
+    resave: false,
+    saveUninitialized: true,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    },
+  })
+);
 
 // Middlewares
 app.use(bodyParser.json());
@@ -63,9 +83,12 @@ export const successResponse = (res, data, message = "Success", meta = {}) => {
 };
 
 // routes
-app.use('/api/pages', pagesRouter);
-app.use('/api/cart', cartRouter); 
-app.use('/api/auth', authRouter); 
+app.use("/api/pages", pagesRouter);
+app.use("/api/cart", cartRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/sort", sortRouter);
+app.use("/api/suggestions", searchRouter);
+app.use("/api/products", filterRouter);
 
 /**
  * GET /api/products
@@ -153,7 +176,7 @@ app.get("/api/products", async (req, res) => {
 
 /**
  * GET /api/products/new-arrivals
- * Fetch products with pagination (12 per page) 
+ * Fetch products with pagination (12 per page)
  */
 
 app.get("/api/products/new-arrivals", async (req, res) => {
@@ -219,12 +242,16 @@ app.get("/api/products/new-arrivals", async (req, res) => {
     }));
 
     // Return response
-    successResponse(res, filteredProducts, "New arrivals fetched successfully", meta);
+    successResponse(
+      res,
+      filteredProducts,
+      "New arrivals fetched successfully",
+      meta
+    );
   } catch (error) {
     handleError(res, error, "Failed to fetch new arrivals");
   }
 });
-
 
 /**
  * GET /api/products/by-category
@@ -527,6 +554,94 @@ app.get("/api/product/:id", async (req, res) => {
     } else {
       handleError(res, error, "Failed to fetch product");
     }
+  }
+});
+
+/**
+ * GET /api/product/by-name/:name
+ * Fetch single product by name/slug
+ */
+app.get("/api/product/by-name/:name", async (req, res) => {
+  try {
+    const { name } = req.params;
+    
+    // Search for products by slug or name
+    const response = await api.get("products", {
+      slug: name,
+      per_page: 1,
+      status: "publish"
+    });
+
+    if (!response.data || response.data.length === 0) {
+      // If no product found by slug, try searching by name
+      const nameSearchResponse = await api.get("products", {
+        search: name,
+        per_page: 1,
+        status: "publish"
+      });
+
+      if (!nameSearchResponse.data || nameSearchResponse.data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found",
+        });
+      }
+      
+      // Use the first result from name search
+      const product = nameSearchResponse.data[0];
+      
+      // Helper function to extract price from price_html
+      const extractPrice = (priceHtml) => {
+        if (!priceHtml) return null;
+        // Remove HTML tags and extract just the number
+        const priceMatch = priceHtml.match(/[\d,]+\.?\d*/);
+        return priceMatch ? priceMatch[0] : null;
+      };
+
+      // Filter only the fields you want
+      const filtered = {
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        permalink: product.permalink,
+        categories: product.categories,
+        images: product.images,
+        attributes: product.attributes,
+        variations: product.variations,
+        price: extractPrice(product.price_html),
+      };
+
+      return res.status(200).json(filtered);
+    }
+
+    // Product found by slug
+    const product = response.data[0];
+
+    // Helper function to extract price from price_html
+    const extractPrice = (priceHtml) => {
+      if (!priceHtml) return null;
+      // Remove HTML tags and extract just the number
+      const priceMatch = priceHtml.match(/[\d,]+\.?\d*/);
+      return priceMatch ? priceMatch[0] : null;
+    };
+
+    // Filter only the fields you want
+    const filtered = {
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      permalink: product.permalink,
+      categories: product.categories,
+      images: product.images,
+      attributes: product.attributes,
+      variations: product.variations,
+      price: extractPrice(product.price_html),
+    };
+
+    // Send filtered data directly
+    res.status(200).json(filtered);
+  } catch (error) {
+    handleError(res, error, "Failed to fetch product by name");
   }
 });
 
@@ -1136,9 +1251,36 @@ app.get("/api/search", async (req, res) => {
       },
     };
 
+    const filteredProducts = response.data.map((product) => ({
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      type: product.type,
+      permalink: product.permalink,
+      date_created: product.date_created,
+      date_created_gmt: product.date_created_gmt,
+      date_modified: product.date_modified,
+      date_modified_gmt: product.date_modified_gmt,
+      price: product.price,
+      regular_price: product.regular_price,
+      sale_price: product.sale_price,
+      price_html: (() => {
+        const match = product.price_html?.match(/>(£|\$|&pound;)?\s*([\d.,]+)/);
+        return match ? match[2] : "";
+      })(),
+      stock_status: product.stock_status,
+      categories: product.categories || [],
+      images: product.images || [],
+      attributes: product.attributes || [],
+      variations: product.variations || [],
+      yoast_head_json: {
+        og_image: product.yoast_head_json?.og_image || [],
+      },
+    }));
+
     successResponse(
       res,
-      response.data,
+      filteredProducts,
       "Product search completed successfully",
       meta
     );

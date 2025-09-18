@@ -1,6 +1,7 @@
 import express from "express";
 import { api, handleError, successResponse } from "../server.js";
 
+
 const router = express.Router();
 
 // Add to cart
@@ -86,12 +87,6 @@ router.post("/add", async (req, res) => {
             ? parseInt(item.variation_id, 10)
             : null;
           const variationMatch = actualVariationId === existingVariationId;
-
-          // Check sample status match
-          /* const existingIsSample =
-            item.meta_data?.some(
-              (meta) => meta.key === "_is_sample" && meta.value === true
-            ) || false; */
 
           // Improved sample status check
           const existingIsSample =
@@ -294,11 +289,6 @@ router.post("/add", async (req, res) => {
     const parsedM2Quantity =
       m2_quantity !== undefined ? parseFloat(m2_quantity) : undefined;
 
-    /* const isSample =
-      is_sample ||
-      (variation_id &&
-        (variation_id.toString().includes("free-sample") ||
-          variation_id.toString().includes("full-size-sample"))); */
     const isSample =
       is_sample ||
       (variation_id &&
@@ -320,12 +310,6 @@ router.post("/add", async (req, res) => {
       });
     }
 
-    /* if (isSample) {
-      lineItem.meta_data.push({
-        key: "_is_sample",
-        value: true,
-      });
-    } */
     // Add sample metadata consistently
     if (isSample) {
       lineItem.meta_data.push({
@@ -439,28 +423,34 @@ router.get("/", async (req, res) => {
       if (order.line_items && order.line_items.length > 0) {
         order.line_items.forEach((item) => {
           // Robust sample detection
-          const isSample = item.meta_data.some(meta => 
-            (meta.key === "_is_sample" && 
-             (meta.value === true || meta.value === "1" || meta.value === 1)) ||
-            item.sku?.includes("SAMPLE") ||
-            item.name?.includes("Sample"))
+          const isSample = item.meta_data.some(
+            (meta) =>
+              (meta.key === "_is_sample" &&
+                (meta.value === true ||
+                  meta.value === "1" ||
+                  meta.value === 1)) ||
+              item.sku?.includes("SAMPLE") ||
+              item.name?.includes("Sample")
+          );
 
           // Safely get m2_quantity with proper fallbacks
-          const m2Meta = item.meta_data.find(m => m.key === "_m2_quantity");
-          const m2Quantity = m2Meta ? 
-            typeof m2Meta.value === 'string' ? 
-              parseFloat(m2Meta.value) : 
-              Number(m2Meta.value) :
-            0;
+          const m2Meta = item.meta_data.find((m) => m.key === "_m2_quantity");
+          const m2Quantity = m2Meta
+            ? typeof m2Meta.value === "string"
+              ? parseFloat(m2Meta.value)
+              : Number(m2Meta.value)
+            : 0;
 
           // Calculate display quantity
-          const displayQuantity = isSample ? item.quantity : m2Quantity || item.quantity;
+          const displayQuantity = isSample
+            ? item.quantity
+            : m2Quantity || item.quantity;
 
           // Calculate prices
           const displayPrice = item.price;
-          const totalPrice = isSample ? 
-            item.price * item.quantity : 
-            item.price * (m2Quantity || item.quantity);
+          const totalPrice = isSample
+            ? item.price * item.quantity
+            : item.price * (m2Quantity || item.quantity);
 
           processedItems.push({
             id: item.id,
@@ -470,7 +460,7 @@ router.get("/", async (req, res) => {
             display_quantity: displayQuantity,
             display_price: displayPrice,
             total: totalPrice.toFixed(2),
-            parent_name: item.name.split(' - ')[0] // Extract parent name if needed
+            parent_name: item.name.split(" - ")[0], // Extract parent name if needed
           });
         });
       }
@@ -487,6 +477,7 @@ router.get("/", async (req, res) => {
 });
 
 /* Delete item by ID */
+
 router.delete("/:itemId", async (req, res) => {
   try {
     const { itemId } = req.params;
