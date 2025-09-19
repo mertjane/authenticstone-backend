@@ -22,7 +22,7 @@ const app = express();
 const corsOptions = {
   origin: [
     /* "http://localhost:5173", */ // Development URL
-    'https://a6726e9a.authenticstone-frontend.pages.dev', // Production URL
+    'https://8728331e.authenticstone-frontend.pages.dev', // Production URL
     process.env.FRONTEND_URL, // Use environment variable as fallback
   ].filter(Boolean), // Remove any undefined values
   credentials: true,
