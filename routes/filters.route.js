@@ -4,38 +4,53 @@ import { api } from "../server.js";
 
 const router = express.Router();
 
+// Caching for performance
 const categoryCache = {};
 const attributeCache = {};
 
-// get category ID from slug
+/**
+ * Get category ID from slug
+ * Used for pa_material (single category filter)
+ */
 async function getCategoryId(slug) {
   if (categoryCache[slug]) return categoryCache[slug];
+  
   try {
     const res = await api.get("products/categories", { 
       slug: slug,
       per_page: 100 
     });
     const id = res.data?.[0]?.id;
-    if (id) categoryCache[slug] = id;
-    return id;
+    if (id) {
+      categoryCache[slug] = id;
+      console.log(`✓ Category cached: ${slug} -> ID ${id}`);
+    }
+    return id || null;
   } catch (error) {
-    console.error(`Error fetching category for slug ${slug}:`, error.message);
+    console.error(`✗ Error fetching category for slug "${slug}":`, error.message);
     return null;
   }
 }
 
-// get attribute term ID from name/slug
+/**
+ * Get attribute term ID from slug/name
+ * Used for multiple attribute filters (colour, finish, room-type-usage, etc.)
+ */
 async function getAttributeTermId(attrSlug, termName) {
   const cacheKey = `${attrSlug}_${termName}`;
   if (attributeCache[cacheKey]) return attributeCache[cacheKey];
   
   try {
-    // First get the attribute ID
+    // Get attribute ID from slug
     const attrRes = await api.get("products/attributes");
     const attr = attrRes.data.find((a) => a.slug === attrSlug);
-    if (!attr) return null;
     
-    // Then get the term ID
+    if (!attr) {
+      console.error(`✗ Attribute not found: ${attrSlug}`);
+      return null;
+    }
+    
+    // Get term ID from attribute
     const termRes = await api.get(`products/attributes/${attr.id}/terms`, {
       per_page: 100
     });
@@ -47,106 +62,70 @@ async function getAttributeTermId(attrSlug, termName) {
     
     if (term) {
       attributeCache[cacheKey] = term.id;
+      console.log(`✓ Attribute term cached: ${attrSlug}/${termName} -> ID ${term.id}`);
       return term.id;
     }
+    
+    console.warn(`✗ Term not found: ${attrSlug}/${termName}`);
     return null;
   } catch (error) {
-    console.error(`Error fetching attribute term for ${attrSlug}/${termName}:`, error.message);
+    console.error(`✗ Error fetching attribute term for ${attrSlug}/${termName}:`, error.message);
     return null;
   }
 }
 
-// build WooCommerce query parameters
-async function buildParams(query) {
-  const params = {
-    status: "publish",
-    page: parseInt(query.page) || 1,
-    per_page: parseInt(query.per_page) || 20
-  };
-
-  // Handle category filtering (material parameter)
-  // Use category OR material attribute, not both to avoid conflicts
-  if (query.material) {
-    const catId = await getCategoryId(query.material);
-    if (catId) {
-      params.category = catId;
-      console.log(`Found category ID ${catId} for material: ${query.material}`);
-    } else {
-      console.log(`No category found for material: ${query.material}, trying material attribute instead`);
-      // If no category found, try material attribute
-      const termId = await getAttributeTermId('pa_material', query.material);
-      if (termId) {
-        params.pa_material = termId;
-        console.log(`Found material attribute term ID ${termId} for: ${query.material}`);
-      }
-    }
-  }
-
-  // Handle other attribute filtering (excluding material since we handled it above)
-  const attributeMap = {
-    colour: 'pa_colour',
-    finish: 'pa_finish',
-    'room-type-usage': 'pa_room-type-usage',
-    sizemm: 'pa_sizemm'
-    // Removed material from here to avoid conflicts
-  };
-
-  // For WooCommerce REST API, we need to use specific attribute parameter format
-  for (const [queryParam, attrSlug] of Object.entries(attributeMap)) {
-    if (query[queryParam]) {
-      const values = query[queryParam].split(',').map(v => v.trim());
-      const termIds = [];
-      
-      for (const value of values) {
-        const termId = await getAttributeTermId(attrSlug, value);
-        if (termId) {
-          termIds.push(termId);
-          console.log(`Found term ID ${termId} for ${attrSlug}/${value}`);
-        } else {
-          console.log(`No term found for ${attrSlug}/${value}`);
-        }
-      }
-      
-      if (termIds.length > 0) {
-        // Use the attribute slug as parameter name with term IDs as value
-        params[attrSlug] = termIds.join(',');
-      }
-    }
-  }
-
-  return params;
-}
-
-// Main filtering route
-router.get("/filters", async (req, res) => {
+/**
+ * Main filtering route
+ * GET /api/products/filters
+ * 
+ * Query parameters:
+ * - material: Single category filter (e.g., "marble-tiles")
+ * - colour: Multiple attribute filter (e.g., "white,black")
+ * - finish: Multiple attribute filter (e.g., "polished,honed")
+ * - room-type-usage: Multiple attribute filter (e.g., "bathroom,kitchen")
+ * - sizemm: Multiple attribute filter (e.g., "600x600,300x300")
+ * - page: Page number (default: 1)
+ * - per_page: Items per page (default: 20)
+ */
+router.get("/", async (req, res) => {
   try {
-    console.log("Filter request query:", req.query);
+    console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("📥 FILTER REQUEST RECEIVED");
+    console.log("Query params:", req.query);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     
-    // Use direct WooCommerce API approach for better attribute filtering
-    const wcBaseUrl = "http://karakedi.xyz/wp-json/wc/v3";
+    // Base WooCommerce API setup
+    const wcBaseUrl = process.env.WC_SITE_URL + "/wp-json/wc/v3";
     const consumerKey = process.env.WC_CONSUMER_KEY;
     const consumerSecret = process.env.WC_CONSUMER_SECRET;
 
+    // Initialize query parameters
     const queryParams = new URLSearchParams({
       page: parseInt(req.query.page) || 1,
-      per_page: parseInt(req.query.per_page) || 20,
+      per_page: parseInt(req.query.per_page) || 12,
       status: "publish",
       consumer_key: consumerKey,
       consumer_secret: consumerSecret,
     });
 
-    // Handle category filtering (material parameter)
+    // ═══════════════════════════════════════════════════════════
+    // 1. CATEGORY FILTER (pa_material) - SINGLE SELECTION ONLY
+    // ═══════════════════════════════════════════════════════════
     if (req.query.material) {
+      console.log(`🏷️  Processing CATEGORY filter (material): "${req.query.material}"`);
+      
       const catId = await getCategoryId(req.query.material);
       if (catId) {
         queryParams.append('category', catId.toString());
-        console.log(`Added category filter: ${catId} for material: ${req.query.material}`);
+        console.log(`   ✓ Added category filter: ID ${catId}\n`);
       } else {
-        console.log(`No category found for material: ${req.query.material}`);
+        console.warn(`   ✗ Category not found for: "${req.query.material}"\n`);
       }
     }
 
-    // Handle attribute filtering
+    // ═══════════════════════════════════════════════════════════
+    // 2. ATTRIBUTE FILTERS - MULTIPLE SELECTIONS ALLOWED
+    // ═══════════════════════════════════════════════════════════
     const attributeMap = {
       colour: 'pa_colour',
       finish: 'pa_finish',
@@ -154,53 +133,71 @@ router.get("/filters", async (req, res) => {
       sizemm: 'pa_sizemm'
     };
 
-    // For each attribute, add it as a separate filter
+    // Process each attribute filter
     for (const [queryParam, attrSlug] of Object.entries(attributeMap)) {
       if (req.query[queryParam]) {
-        const values = req.query[queryParam].split(',').map(v => v.trim());
+        console.log(`🎨 Processing ATTRIBUTE filter (${queryParam}): "${req.query[queryParam]}"`);
+        
+        // Split multiple values by comma
+        const values = req.query[queryParam].split(',').map(v => v.trim()).filter(v => v);
         const termIds = [];
         
+        // Get term ID for each value
         for (const value of values) {
           const termId = await getAttributeTermId(attrSlug, value);
           if (termId) {
             termIds.push(termId);
-            console.log(`Found term ID ${termId} for ${attrSlug}/${value}`);
+            console.log(`   ✓ ${value} -> ID ${termId}`);
           } else {
-            console.log(`No term found for ${attrSlug}/${value}`);
+            console.warn(`   ✗ Term not found: "${value}"`);
           }
         }
         
+        // Add to query if we found any valid terms
         if (termIds.length > 0) {
-          // Add each attribute as separate parameter
           queryParams.append('attribute', attrSlug);
           queryParams.append('attribute_term', termIds.join(','));
-          console.log(`Added attribute filter: ${attrSlug} = ${termIds.join(',')}`);
+          console.log(`   ✓ Added filter: ${attrSlug} = [${termIds.join(', ')}]\n`);
+        } else {
+          console.warn(`   ✗ No valid terms found for ${queryParam}\n`);
         }
       }
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // 3. FETCH PRODUCTS FROM WOOCOMMERCE
+    // ═══════════════════════════════════════════════════════════
     const wcUrl = `${wcBaseUrl}/products?${queryParams}`;
-    console.log("Direct WooCommerce URL:", wcUrl);
+    console.log("🌐 WooCommerce API URL:");
+    console.log(wcUrl.replace(consumerKey, '***').replace(consumerSecret, '***'));
+    console.log("");
 
     const wcResponse = await fetch(wcUrl);
     
     if (!wcResponse.ok) {
-      throw new Error(`WooCommerce API error: ${wcResponse.status} ${wcResponse.statusText}`);
+      const errorText = await wcResponse.text();
+      throw new Error(`WooCommerce API error: ${wcResponse.status} ${wcResponse.statusText}\n${errorText}`);
     }
 
     const products = await wcResponse.json();
-    console.log(`Direct API returned ${products.length} products`);
     
+    // Get pagination info from headers
     const total = parseInt(wcResponse.headers.get("x-wp-total")) || products.length;
     const totalPages = parseInt(wcResponse.headers.get("x-wp-totalpages")) || 1;
 
-    console.log(`Total products found: ${total}`);
+    console.log(`✅ SUCCESS: Found ${products.length} products (Total: ${total})`);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
-    const data = products.map((p) => ({
+    // ═══════════════════════════════════════════════════════════
+    // 4. FORMAT RESPONSE
+    // ═══════════════════════════════════════════════════════════
+    const formattedProducts = products.map((p) => ({
       id: p.id,
       name: p.name,
       slug: p.slug,
+      type: p.type,
       permalink: p.permalink,
+      date_created: p.date_created,
       price: p.price,
       regular_price: p.regular_price,
       sale_price: p.sale_price,
@@ -211,35 +208,51 @@ router.get("/filters", async (req, res) => {
         }
         return "";
       })(),
-      categories: p.categories,
-      images: p.images,
-      attributes: p.attributes,
-      variations: p.variations,
       stock_status: p.stock_status,
+      categories: p.categories || [],
+      images: p.images || [],
+      attributes: p.attributes || [],
+      variations: p.variations || [],
       yoast_head_json: {
         og_image: p.yoast_head_json?.og_image || [],
       },
     }));
 
+    // Build metadata
+    const currentPage = parseInt(req.query.page) || 1;
+    const perPage = parseInt(req.query.per_page) || 12;
+
     res.json({
       success: true,
       message: "Filtered products fetched successfully",
-      data,
+      data: formattedProducts,
       meta: {
-        current_page: parseInt(req.query.page) || 1,
-        per_page: parseInt(req.query.per_page) || 20,
+        current_page: currentPage,
+        per_page: perPage,
         total_pages: totalPages,
         total_products: total,
-        has_next_page: (parseInt(req.query.page) || 1) < totalPages,
-        has_prev_page: (parseInt(req.query.page) || 1) > 1,
+        has_next_page: currentPage < totalPages,
+        has_prev_page: currentPage > 1,
+        filters_applied: {
+          material: req.query.material || null,
+          colour: req.query.colour || null,
+          finish: req.query.finish || null,
+          room_type_usage: req.query['room-type-usage'] || null,
+          sizemm: req.query.sizemm || null,
+        }
       },
     });
+
   } catch (err) {
-    console.error("Filter error:", err.response?.data || err.message);
+    console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.error("❌ FILTER ERROR:");
+    console.error(err.message);
+    console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    
     res.status(500).json({ 
       success: false, 
       message: "Failed to fetch filtered products", 
-      error: err.response?.data || err.message 
+      error: err.message 
     });
   }
 });
