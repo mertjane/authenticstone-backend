@@ -22,7 +22,7 @@ import session from "express-session";
 import express from "express";
 import cors from "cors";
 import WooCommerceRestApiPkg from "@woocommerce/woocommerce-rest-api";
-import { getWooSession } from "./utils/woocommerceSession.js";
+
 
 dotenv.config();
 
@@ -86,7 +86,7 @@ app.use(
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(getWooSession);
+
 
 
 /* ------------------------- 🛒 WOOCOMMERCE CONFIG ------------------------- */
