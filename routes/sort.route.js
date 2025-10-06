@@ -17,7 +17,8 @@ router.get('/products', async (req, res) => {
     
     // Map sortBy options to WooCommerce API parameters
     const getSortParams = (sortBy) => {
-      switch (sortBy.toLowerCase()) {
+      const key = (sortBy || '').toLowerCase();
+      switch (key) {
         case 'popular':
         case 'most-popular':
           return { orderby: 'popularity', order: 'desc' };
@@ -29,6 +30,14 @@ router.get('/products', async (req, res) => {
         case 'oldest':
         case 'oldest-first':
           return { orderby: 'date', order: 'asc' };
+
+        // Shorthand date direction
+        case 'asc':
+        case 'date-asc':
+          return { orderby: 'date', order: 'asc' };
+        case 'desc':
+        case 'date-desc':
+          return { orderby: 'date', order: 'desc' };
         
         case 'name-az':
         case 'title-az':
@@ -45,6 +54,13 @@ router.get('/products', async (req, res) => {
         case 'price-high':
         case 'price-high-to-low':
           return { orderby: 'price', order: 'desc' };
+
+        // Additional price aliases
+        case 'price':
+        case 'price-asc':
+          return { orderby: 'price', order: 'asc' };
+        case 'price-desc':
+          return { orderby: 'price', order: 'desc' };
         
         default:
           return { orderby: 'date', order: 'desc' }; // Default to newest
@@ -52,7 +68,11 @@ router.get('/products', async (req, res) => {
     };
 
     // Get sort parameters
-    const { orderby, order } = getSortParams(sortBy);
+    let { orderby, order } = getSortParams(sortBy);
+
+    // Allow explicit override via query (?orderby=price&order=asc)
+    if (req.query.orderby) orderby = String(req.query.orderby).toLowerCase();
+    if (req.query.order) order = String(req.query.order).toLowerCase();
     
     // Build API parameters
     const apiParams = {
