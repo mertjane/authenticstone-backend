@@ -1,6 +1,8 @@
 import dotenv from "dotenv";
 import pagesRouter from "./routes/pages.route.js";
 import cartRouter from "./routes/cart.route.js";
+import checkoutRouter from "./routes/checkout.route.js";
+import shippingRouter from "./routes/shipping.route.js";
 import authRouter from "./routes/auth.route.js";
 import sortRouter from "./routes/sort.route.js";
 import searchRouter from "./routes/search.route.js";
@@ -31,6 +33,9 @@ const WooCommerceRestApi =
 
 const app = express();
 
+// Trust proxy to get real client IP (important for deployments behind proxies/CDN)
+app.set('trust proxy', true);
+
 /* ------------------------- 🧩 CORS CONFIG ------------------------- */
 
 // Dynamic CORS origin check – allows both production and preview deployments
@@ -58,7 +63,7 @@ const corsOptions = {
   },
   credentials: true, // allow cookies
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  allowedHeaders: ["Content-Type", "Authorization", "Nonce", "X-Requested-With", "X-Session-Id"],
   optionsSuccessStatus: 200,
 };
 
@@ -87,6 +92,27 @@ app.use(
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+
+/* ------------------------- 🛒 CART SESSION STORAGE ------------------------- */
+
+// Create shared Map for cart sessions (accessible to all routes)
+const cartSessions = new Map();
+
+// Make it available to all routes via app.locals
+app.locals.cartSessions = cartSessions;
+
+// Optional: Clean up old sessions every hour to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [sessionId, data] of cartSessions.entries()) {
+    // Remove sessions older than 24 hours
+    const sessionAge = now - parseInt(sessionId);
+    if (sessionAge > 24 * 60 * 60 * 1000) {
+      cartSessions.delete(sessionId);
+      console.log('Cleaned up expired session:', sessionId);
+    }
+  }
+}, 60 * 60 * 1000); // Run every hour
 
 
 /* ------------------------- 🛒 WOOCOMMERCE CONFIG ------------------------- */
@@ -123,6 +149,8 @@ export const successResponse = (res, data, message = "Success", meta = {}) => {
 
 app.use("/api/pages", pagesRouter);
 app.use("/api/cart", cartRouter);
+app.use("/api/checkout", checkoutRouter);
+app.use("/api/shipping", shippingRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/sort", sortRouter);
 app.use("/api/suggestions", searchRouter);
