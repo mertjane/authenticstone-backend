@@ -42,7 +42,7 @@ router.post("/register", async (req, res) => {
     const token = jwt.sign(
       { userId: newCustomer.id, email: newCustomer.email },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "7d" }
     );
 
     const transporter = nodemailer.createTransport({
@@ -98,20 +98,6 @@ router.post("/register", async (req, res) => {
 
 // Login route
 router.post("/login", async (req, res) => {
-  // Set specific origin (not *) when using credentials
-  /*
-  res.header("Access-Control-Allow-Origin", "http://localhost:5173");  // frontend URL
-  res.header("Access-Control-Allow-Origin", "https://6ccc4c69.authenticstone-frontend.pages.dev"); // frontend URL
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
- 
-  // Handle OPTIONS preflight
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-      */
   try {
     const { email, password } = req.body;
 
@@ -155,7 +141,7 @@ router.post("/login", async (req, res) => {
     const token = jwt.sign(
       { userId: customer.id, email: customer.email },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "7d" }
     );
 
     res.json({
@@ -653,6 +639,219 @@ router.delete("/account/delete", async (req, res) => {
   } catch (error) {
     console.error("Account deletion error:", error);
     res.status(500).json({ error: "Account deletion failed" });
+  }
+});
+
+// REFRESH TOKEN ENDPOINT - NEW!
+router.post("/refresh-token", async (req, res) => {
+  try {
+    const { token } = req.body;
+    
+    if (!token) {
+      return res.status(401).json({ error: "Token required" });
+    }
+
+    // Verify the old token (even if expired)
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (error) {
+      // If token is expired, try to decode it without verification
+      if (error.name === 'TokenExpiredError') {
+        decoded = jwt.decode(token);
+      } else {
+        return res.status(401).json({ error: "Invalid token" });
+      }
+    }
+
+    // Verify user still exists
+    const { data: customer } = await api.get(`customers/${decoded.userId}`);
+    
+    if (!customer) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Generate new token with 7 days expiration
+    const newToken = jwt.sign(
+      { userId: customer.id, email: customer.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      message: "Token refreshed",
+      token: newToken,
+      customer,
+    });
+  } catch (error) {
+    console.error("Token refresh error:", error);
+    res.status(500).json({ error: "Token refresh failed" });
+  }
+});
+
+
+// VERIFY TOKEN ENDPOINT
+router.get("/verify", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      return res.status(401).json({ error: "Missing Authorization header" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Get customer from WooCommerce
+    const { data: customer } = await api.get(`customers/${decoded.userId}`);
+
+    if (!customer) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Return user data (in the format expected by frontend)
+    res.json({
+      user: {
+        id: customer.id,
+        email: customer.email,
+        first_name: customer.first_name,
+        last_name: customer.last_name,
+        role: customer.role,
+        username: customer.username,
+        billing: customer.billing,
+        shipping: customer.shipping,
+        is_paying_customer: customer.is_paying_customer,
+        avatar_url: customer.avatar_url,
+        date_created: customer.date_created,
+        date_modified: customer.date_modified,
+        token: token,
+        wpToken: '', // Not stored, so empty string
+      }
+    });
+  } catch (error) {
+    console.error("Token verification error:", error);
+
+    if (
+      error.name === "JsonWebTokenError" ||
+      error.name === "TokenExpiredError"
+    ) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    res.status(500).json({ error: "Token verification failed" });
+  }
+});
+
+
+/* ======================================== ORDER HISTORY ROUTES ======================================== */
+
+ 
+router.get("/orders", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      return res.status(401).json({ error: "Missing Authorization header" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const customerId = decoded.userId;
+
+    // Get query parameters for pagination and filtering
+    const page = parseInt(req.query.page) || 1; 
+    const perPage = parseInt(req.query.per_page) || 10;
+    const status = req.query.status; // e.g., 'completed', 'processing', 'pending'
+
+    // Build query parameters
+    const queryParams = {
+      customer: customerId,
+      page,
+      per_page: perPage,
+      orderby: "date",
+      order: "desc", // Most recent orders first
+    };
+
+    // Add status filter if provided
+    if (status) {
+      queryParams.status = status;
+    }
+
+    // Fetch orders from WooCommerce
+    const { data: orders, headers } = await api.get("orders", queryParams);
+
+    // Get total number of orders from headers
+    const totalOrders = parseInt(headers["x-wp-total"]) || 0;
+    const totalPages = parseInt(headers["x-wp-totalpages"]) || 0;
+
+    res.json({
+      orders,
+      pagination: {
+        total: totalOrders,
+        totalPages,
+        currentPage: page,
+        perPage,
+      },
+    });
+  } catch (error) {
+    console.error("Fetch orders error:", error);
+
+    if (
+      error.name === "JsonWebTokenError" ||
+      error.name === "TokenExpiredError"
+    ) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    res.status(500).json({ error: "Failed to fetch orders" });
+  }
+});
+
+// Get a specific order by ID
+router.get("/orders/:orderId", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      return res.status(401).json({ error: "Missing Authorization header" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const customerId = decoded.userId;
+
+    const { orderId } = req.params;
+
+    // Fetch the specific order
+    const { data: order } = await api.get(`orders/${orderId}`);
+
+    // Verify that the order belongs to the authenticated user
+    if (order.customer_id !== customerId) {
+      return res.status(403).json({ error: "Unauthorized access to this order" });
+    }
+
+    res.json({ order });
+  } catch (error) {
+    console.error("Fetch order error:", error);
+
+    if (
+      error.name === "JsonWebTokenError" ||
+      error.name === "TokenExpiredError"
+    ) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    if (error.response?.status === 404) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.status(500).json({ error: "Failed to fetch order" });
   }
 });
 

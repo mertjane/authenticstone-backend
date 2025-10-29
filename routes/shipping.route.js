@@ -52,6 +52,7 @@ router.post("/methods", async (req, res) => {
 
     const lineItems = updatedOrder.line_items || [];
     let totalWeight = 0;
+
     const cartShippingClasses = new Set();
     const productCategories = new Set();
     const productSlugs = new Set();
@@ -79,7 +80,7 @@ router.post("/methods", async (req, res) => {
 
         // ✅ Add categories for additional filtering
         if (product.categories && product.categories.length > 0) {
-          product.categories.forEach(cat => {
+          product.categories.forEach((cat) => {
             productCategories.add(cat.name.toLowerCase());
             productCategories.add(cat.slug.toLowerCase());
           });
@@ -87,10 +88,16 @@ router.post("/methods", async (req, res) => {
 
         console.log(`📦 Item: ${item.name}`);
         console.log(`   Weight: ${weight}kg x ${item.quantity}`);
-        console.log(`   Shipping Class: ${product.shipping_class || 'none'}`);
-        console.log(`   Categories: ${product.categories?.map(c => c.name).join(', ') || 'none'}`);
+        console.log(`   Shipping Class: ${product.shipping_class || "none"}`);
+        console.log(
+          `   Categories: ${
+            product.categories?.map((c) => c.name).join(", ") || "none"
+          }`
+        );
       } catch (error) {
-        console.warn(`⚠️ Could not fetch details for product ${item.product_id}`);
+        console.warn(
+          `⚠️ Could not fetch details for product ${item.product_id}`
+        );
       }
     }
 
@@ -117,11 +124,16 @@ router.post("/methods", async (req, res) => {
 
     const matchedZone = zonesWithLocations.find((zone) =>
       zone.locations.some((location) => {
-        if (location.type === "country" && location.code === country) return true;
-        if (location.type === "state" && location.code === `${country}:${state}`) return true;
+        if (location.type === "country" && location.code === country)
+          return true;
+        if (
+          location.type === "state" &&
+          location.code === `${country}:${state}`
+        )
+          return true;
         if (location.type === "postcode") {
-          const locationCode = location.code.toLowerCase().replace(/\s/g, '');
-          const userPostcode = postcode.toLowerCase().replace(/\s/g, '');
+          const locationCode = location.code.toLowerCase().replace(/\s/g, "");
+          const userPostcode = postcode.toLowerCase().replace(/\s/g, "");
           return userPostcode.startsWith(locationCode);
         }
         return false;
@@ -132,12 +144,14 @@ router.post("/methods", async (req, res) => {
       console.log("❌ No shipping zone found for location");
       return res.json({
         success: true,
-        shipping_methods: [{
-          title: "Collection",
-          cost: "Free",
-          method_id: "local_pickup",
-          instance_id: 0,
-        }],
+        shipping_methods: [
+          {
+            title: "Collection",
+            cost: "Free",
+            method_id: "local_pickup",
+            instance_id: 0,
+          },
+        ],
       });
     }
 
@@ -148,115 +162,193 @@ router.post("/methods", async (req, res) => {
       { auth }
     );
 
+    // ✅ ADD THIS DEBUG CODE HERE - BEFORE "let shippingMethods = [];"
+    console.log("\n🔍 DEBUG: Raw method data from WooCommerce:");
+    const economyMethod = methods.find((m) => m.instance_id === 1);
+    if (economyMethod) {
+      console.log(
+        "Full Economy Delivery method:",
+        JSON.stringify(economyMethod, null, 2)
+      );
+    }
+    console.log("\n"); // Add spacing
+
     let shippingMethods = [];
 
     // ✅ Define special product type prefixes
     const specialPrefixes = [
       { prefix: "Moulding -", keywords: ["moulding", "molding"] },
       { prefix: "Jerusalem -", keywords: ["jerusalem"] },
-      { prefix: "Vanity Tops -", keywords: ["vanity", "vanity-top", "vanity-tops"] },
+      {
+        prefix: "Vanity Tops -",
+        keywords: ["vanity", "vanity-top", "vanity-tops"],
+      },
       { prefix: "Brazilian -", keywords: ["brazilian"] },
       { prefix: "Slab -", keywords: ["slab"] },
       { prefix: "LTP -", keywords: ["ltp"] },
     ];
 
-    for (const method of methods.filter(m => m.enabled)) {
-      const title = (method.settings?.method_title?.value) || method.title || method.method_title || "Unnamed Method";
+    for (const method of methods.filter((m) => m.enabled)) {
+      const title =
+        method.settings?.method_title?.value ||
+        method.title ||
+        method.method_title ||
+        "Unnamed Method";
 
       console.log(`\n🔍 Evaluating method: ${title}`);
-      console.log(`   Method ID: ${method.method_id}, Instance: ${method.instance_id}`);
+      console.log(
+        `   Method ID: ${method.method_id}, Instance: ${method.instance_id}`
+      );
 
       // ✅ Check if this is a special product-specific method
-      const specialPrefix = specialPrefixes.find(sp => title.startsWith(sp.prefix));
+      const specialPrefix = specialPrefixes.find((sp) =>
+        title.startsWith(sp.prefix)
+      );
 
       if (specialPrefix) {
         // This method is for specific products only
         const hasMatchingProduct =
-          cartShippingClassesArray.some(cls =>
-            specialPrefix.keywords.some(keyword => cls.includes(keyword))
+          cartShippingClassesArray.some((cls) =>
+            specialPrefix.keywords.some((keyword) => cls.includes(keyword))
           ) ||
-          Array.from(productCategories).some(cat =>
-            specialPrefix.keywords.some(keyword => cat.includes(keyword))
+          Array.from(productCategories).some((cat) =>
+            specialPrefix.keywords.some((keyword) => cat.includes(keyword))
           ) ||
-          Array.from(productSlugs).some(slug =>
-            specialPrefix.keywords.some(keyword => slug.includes(keyword))
+          Array.from(productSlugs).some((slug) =>
+            specialPrefix.keywords.some((keyword) => slug.includes(keyword))
           );
 
         if (!hasMatchingProduct) {
-          console.log(`⏭️ Skipping ${title} - cart doesn't contain matching products`);
+          console.log(
+            `⏭️ Skipping ${title} - cart doesn't contain matching products`
+          );
           continue;
         }
         console.log(`✅ Cart contains products matching ${title}`);
       }
 
       // ✅ Check for shipping class restrictions
-      const methodShippingClasses = method.settings?.class_cost_calculation_type?.value ||
-                                     method.settings?.shipping_class?.value;
+      const methodShippingClasses =
+        method.settings?.class_cost_calculation_type?.value ||
+        method.settings?.shipping_class?.value;
 
-      if (methodShippingClasses && typeof methodShippingClasses === 'string' &&
-          methodShippingClasses !== '' && methodShippingClasses !== 'per_order') {
+      if (
+        methodShippingClasses &&
+        typeof methodShippingClasses === "string" &&
+        methodShippingClasses !== "" &&
+        methodShippingClasses !== "per_order"
+      ) {
         // Method has shipping class restrictions
-        const requiredClasses = methodShippingClasses.split(',').map(c => c.trim().toLowerCase());
-        const hasRequiredClass = requiredClasses.some(reqClass =>
+        const requiredClasses = methodShippingClasses
+          .split(",")
+          .map((c) => c.trim().toLowerCase());
+        const hasRequiredClass = requiredClasses.some((reqClass) =>
           cartShippingClassesArray.includes(reqClass)
         );
 
         if (!hasRequiredClass && cartShippingClassesArray.length > 0) {
           console.log(`⏭️ Skipping ${title} - shipping class mismatch`);
-          console.log(`   Required: ${requiredClasses.join(', ')}`);
-          console.log(`   Cart has: ${cartShippingClassesArray.join(', ')}`);
+          console.log(`   Required: ${requiredClasses.join(", ")}`);
+          console.log(`   Cart has: ${cartShippingClassesArray.join(", ")}`);
           continue;
         }
       }
 
-      // ✅ Calculate cost based on weight rules
+      // ✅ Calculate cost based on weight rules - UPDATED FOR FLEXIBLE SHIPPING
       let calculatedCost = 0;
       let ruleMatched = false;
 
-      if (method.settings?.method_rules?.value) {
-        const rules = method.settings.method_rules.value;
+      // Check if this is Flexible Shipping
+      if (method.method_id === "flexible_shipping_single") {
+        // Flexible Shipping uses different fields
+        const basedOn = method.settings?.based_on?.value || "";
 
-        const matchingRule = rules
-          .filter(rule => {
-            const minWeight = parseFloat(rule.min || 0);
-            const maxWeight = parseFloat(rule.max || Infinity);
-            return totalWeight >= minWeight && totalWeight <= maxWeight;
-          })
-          .sort((a, b) => {
-            const aMin = parseFloat(a.min || 0);
-            const bMin = parseFloat(b.min || 0);
-            return bMin - aMin;
-          })[0];
+        console.log(`\n🔍 Flexible Shipping method detected`);
+        console.log(`   Based on: ${basedOn}`);
 
-        if (matchingRule) {
-          if (matchingRule.cost_per_order) {
-            calculatedCost = parseFloat(matchingRule.cost_per_order);
-          } else if (matchingRule.cost_per_weight) {
-            calculatedCost = parseFloat(matchingRule.cost_per_weight) * totalWeight;
+        // For weight-based shipping, we need to calculate manually
+        // Check all settings for cost-related fields
+        const settingsKeys = Object.keys(method.settings || {});
+        console.log(`   Available settings:`, settingsKeys.join(", "));
+
+        // Look for cost in various places
+        if (method.settings?.method_cost_based_on?.value === "weight") {
+          // Weight-based calculation
+          const costPerKg = parseFloat(
+            method.settings?.method_cost_per_unit?.value || 0
+          );
+          const minimumCost = parseFloat(
+            method.settings?.method_minimum_cost?.value || 0
+          );
+          const maximumCost = parseFloat(
+            method.settings?.method_maximum_cost?.value || 0
+          );
+
+          calculatedCost = costPerKg * totalWeight;
+
+          if (minimumCost > 0 && calculatedCost < minimumCost) {
+            calculatedCost = minimumCost;
           }
-          ruleMatched = true;
+          if (maximumCost > 0 && calculatedCost > maximumCost) {
+            calculatedCost = maximumCost;
+          }
 
-          console.log(`💰 Applied rule for ${title}: £${calculatedCost}`);
-          console.log(`   Weight: ${totalWeight}kg, Range: ${matchingRule.min || 0}-${matchingRule.max || '∞'}kg`);
+          ruleMatched = true;
+          console.log(
+            `💰 Weight-based calculation: ${costPerKg}/kg × ${totalWeight}kg = £${calculatedCost}`
+          );
         } else {
-          console.log(`⏭️ Skipping ${title} - no matching weight rule for ${totalWeight}kg`);
-          continue;
+          // Try to find any cost field
+          const possibleCostFields = [
+            "method_free_shipping_cost",
+            "method_calculation_method",
+            "cost",
+            "default_cost",
+          ];
+
+          for (const field of possibleCostFields) {
+            if (method.settings?.[field]) {
+              const fieldValue =
+                method.settings[field].value || method.settings[field];
+              console.log(`   Found ${field}: ${fieldValue}`);
+            }
+          }
+
+          // For now, set a default based on weight ranges
+          // This is a fallback - you should configure this in WooCommerce
+          if (totalWeight < 30) {
+            calculatedCost = 0;
+          } else if (totalWeight < 100) {
+            calculatedCost = 30;
+          } else if (totalWeight < 200) {
+            calculatedCost = 50;
+          } else {
+            calculatedCost = 75;
+          }
+
+          ruleMatched = true;
+          console.log(
+            `💰 Using fallback weight-based pricing: £${calculatedCost} for ${totalWeight}kg`
+          );
         }
-      } else if (method.settings?.cost) {
-        calculatedCost = parseFloat(method.settings.cost.value || method.settings.cost || 0);
-        ruleMatched = true;
-        console.log(`💰 Using fixed cost for ${title}: £${calculatedCost}`);
       } else {
-        console.log(`⚠️ No cost rules found for ${title}, skipping`);
-        continue;
+        // Non-Flexible Shipping methods (like flat_rate)
+        if (method.settings?.cost) {
+          calculatedCost = parseFloat(
+            method.settings.cost.value || method.settings.cost || 0
+          );
+          ruleMatched = true;
+          console.log(`💰 Using fixed cost: £${calculatedCost}`);
+        }
       }
 
       if (!ruleMatched) {
-        console.log(`⏭️ Skipping ${title} - no applicable rules`);
+        console.log(`⚠️ No applicable pricing found for ${title}, skipping`);
         continue;
       }
 
-      const displayCost = calculatedCost === 0 ? "Free" : `£${calculatedCost.toFixed(2)}`;
+      const displayCost =
+        calculatedCost === 0 ? "Free" : `£${calculatedCost.toFixed(2)}`;
 
       console.log(`✅ Including: ${title} - ${displayCost}`);
 
@@ -270,42 +362,46 @@ router.post("/methods", async (req, res) => {
     }
 
     // ✅ Remove exact duplicates by title AND cost
-        const uniqueMethods = [];
-        const seenMethods = new Map();
+    const uniqueMethods = [];
+    const seenMethods = new Map();
 
-        for (const method of shippingMethods) {
-          // Normalize title and create key with title + cost
-          const normalizedTitle = method.title.replace(/\s+/g, ' ').trim();
-          const methodKey = `${normalizedTitle}|${method.costNumeric}`;
+    for (const method of shippingMethods) {
+      // Normalize title and create key with title + cost
+      let normalizedTitle = method.title.replace(/\s+/g, " ").trim();
 
-          if (!seenMethods.has(methodKey)) {
-            seenMethods.set(methodKey, true);
-            // Remove costNumeric before sending to client
-            const { costNumeric, ...clientMethod } = method;
-            clientMethod.title = normalizedTitle;
-            uniqueMethods.push(clientMethod);
-          } else {
-            console.log(`🗑️ Removing duplicate: ${method.title} - ${method.cost}`);
-          }
-        }
+      // ✅ Fix "Collection: Free" to just "Collection"
+      if (normalizedTitle.toLowerCase().includes("collection")) {
+        normalizedTitle = "Collection";
+      }
+      const methodKey = `${normalizedTitle}|${method.costNumeric}`;
 
-        // ✅ Add Collection method only if not already present
-        const collectionKey = 'Collection|0';
-        if (!seenMethods.has(collectionKey)) {
-          uniqueMethods.push({
-            title: "Collection",
-            cost: "Free",
-            method_id: "local_pickup",
-            instance_id: 0,
-          });
-        }
+      if (!seenMethods.has(methodKey)) {
+        seenMethods.set(methodKey, true);
+        // Remove costNumeric before sending to client
+        const { costNumeric, ...clientMethod } = method;
+        clientMethod.title = normalizedTitle;
+        uniqueMethods.push(clientMethod);
+      } else {
+        console.log(`🗑️ Removing duplicate: ${method.title} - ${method.cost}`);
+      }
+    }
 
-    console.log("\n📋 Final shipping methods:", uniqueMethods.length);
-    uniqueMethods.forEach(m => console.log(`   - ${m.title}: ${m.cost}`));
+    // ✅ Filter out unwanted methods (Next Day Delivery)
+    const filteredMethods = uniqueMethods.filter((method) => {
+      // Remove Next Day Delivery
+      if (method.title.toLowerCase().includes("next day")) {
+        console.log(`🗑️ Filtering out: ${method.title}`);
+        return false;
+      }
+      return true;
+    });
+
+    console.log("\n📋 Final shipping methods:", filteredMethods.length);
+    filteredMethods.forEach((m) => console.log(`   - ${m.title}: ${m.cost}`));
 
     return res.json({
       success: true,
-      shipping_methods: uniqueMethods,
+      shipping_methods: filteredMethods, // ✅ Return filtered methods
     });
   } catch (error) {
     console.error("❌ Shipping error:", error.response?.data || error.message);

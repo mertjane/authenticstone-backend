@@ -104,7 +104,7 @@ app.locals.cartSessions = cartSessions;
 // Optional: Clean up old sessions every hour to prevent memory leaks
 setInterval(() => {
   const now = Date.now();
-  for (const [sessionId, data] of cartSessions.entries()) {
+  for (const [sessionId, _data] of cartSessions.entries()) {
     // Remove sessions older than 24 hours
     const sessionAge = now - parseInt(sessionId);
     if (sessionAge > 24 * 60 * 60 * 1000) {
