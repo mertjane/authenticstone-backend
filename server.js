@@ -17,7 +17,9 @@ import tagsRouter from "./routes/tags.route.js";
 import megamenuRouter from "./routes/megamenu.route.js";
 import advancedSearchRouter from "./routes/advancedSearch.route.js";
 import filteredProductsRouter from "./routes/filteredProducts.route.js";
+import sitemapRoutes from './routes/sitemap.route.js';
 import contentRouter from "./routes/content.route.js";
+import similarRoutes from './routes/similar.route.js';
 
 import bodyParser from "body-parser";
 import session from "express-session";
@@ -165,7 +167,9 @@ app.use("/api/tags", tagsRouter);
 app.use("/api/megamenu", megamenuRouter);
 app.use("/api/search", advancedSearchRouter);
 app.use("/api/filtered-products", filteredProductsRouter);
+app.use('/api/sitemap', sitemapRoutes);
 app.use("/api", contentRouter); // posts and clearance
+app.use('/api/similar', similarRoutes);
 
 /* ------------------------- SERVER ------------------------- */
 
