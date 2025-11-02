@@ -11,6 +11,7 @@ import productsRouter from "./routes/products.route.js";
 import singleProductRouter from "./routes/singleProduct.route.js";
 import variationsRouter from "./routes/variations.route.js";
 import attributesRouter from "./routes/attributes.route.js";
+import newsletterRoutes from './routes/newsletter.route.js';
 import attributeRouter from "./routes/attribute.route.js";
 import categoriesRouter from "./routes/categories.route.js";
 import tagsRouter from "./routes/tags.route.js";
@@ -170,6 +171,7 @@ app.use("/api/filtered-products", filteredProductsRouter);
 app.use('/api/sitemap', sitemapRoutes);
 app.use("/api", contentRouter); // posts and clearance
 app.use('/api/similar', similarRoutes);
+app.use('/api/newsletter', newsletterRoutes);
 
 /* ------------------------- SERVER ------------------------- */
 

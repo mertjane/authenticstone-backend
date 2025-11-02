@@ -7,7 +7,7 @@ const router = express.Router();
 // GET /api/sitemap - Generate sitemap XML
 router.get('/', async (req, res) => {
   try {
-    const baseUrl = process.env.FRONTEND_URL || 'https://yourdomain.com';
+    const baseUrl = process.env.FRONTEND_URL || 'https://authenticstone-frontend.pages.dev';
     const currentDate = new Date().toISOString().split('T')[0];
 
     // Fetch all published products

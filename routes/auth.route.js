@@ -1,4 +1,5 @@
 import express from "express";
+import axios from "axios";
 import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -45,44 +46,16 @@ router.post("/register", async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    const loginLink = `${process.env.FRONTEND_URL}/my-account`;
-
-    const templatePath = path.join(
-      __dirname,
-      "../templates/register-confirmation.html"
-    );
-    let htmlTemplate = await fs.readFile(templatePath, "utf8");
-
-    htmlTemplate = htmlTemplate
-      .replace("{{email}}", newCustomer.email || "Customer")
-      .replace("{{loginLink}}", loginLink);
-
-    await transporter.sendMail({
-      from: "Authentic Stone",
-      to: email,
-      subject: "Welcome to Authentic Stone – Your Account is Ready!",
-      html: htmlTemplate,
-      attachments: [
-        {
-          filename: "logo.png",
-          path: path.join(
-            __dirname,
-            "../assets/Authentic-Stone-Logo-Black-400x33-1.png"
-          ),
-          cid: "logo",
-        },
-      ],
-    });
+    // Trigger WooCommerce email via custom endpoint
+    try {
+      await axios.post(
+        `${process.env.WC_SITE_URL}/wp-json/custom/v1/send-registration-email`,
+        { user_id: newCustomer.id }
+      );
+    } catch (emailError) {
+      console.error("Failed to send registration email:", emailError);
+      // Don't fail registration if email fails
+    }
 
     // Respond to client
     res.status(201).json({
@@ -209,6 +182,11 @@ router.put("/update-profile", async (req, res) => {
 router.post("/lost-password", async (req, res) => {
   const { email } = req.body;
 
+  if (!email) {
+    return res.status(400).json({ message: "Email is required" });
+  }
+
+  // Trigger WordPress password reset - this will send WooCommerce's email template
   const wcResponse = await fetch(
     `${process.env.WC_SITE_URL}/wp-json/wc/v3/customers?email=${email}`,
     {
@@ -646,7 +624,7 @@ router.delete("/account/delete", async (req, res) => {
 router.post("/refresh-token", async (req, res) => {
   try {
     const { token } = req.body;
-    
+
     if (!token) {
       return res.status(401).json({ error: "Token required" });
     }
@@ -657,7 +635,7 @@ router.post("/refresh-token", async (req, res) => {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (error) {
       // If token is expired, try to decode it without verification
-      if (error.name === 'TokenExpiredError') {
+      if (error.name === "TokenExpiredError") {
         decoded = jwt.decode(token);
       } else {
         return res.status(401).json({ error: "Invalid token" });
@@ -666,7 +644,7 @@ router.post("/refresh-token", async (req, res) => {
 
     // Verify user still exists
     const { data: customer } = await api.get(`customers/${decoded.userId}`);
-    
+
     if (!customer) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -689,7 +667,6 @@ router.post("/refresh-token", async (req, res) => {
   }
 });
 
-
 // VERIFY TOKEN ENDPOINT
 router.get("/verify", async (req, res) => {
   try {
@@ -703,7 +680,7 @@ router.get("/verify", async (req, res) => {
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     // Get customer from WooCommerce
     const { data: customer } = await api.get(`customers/${decoded.userId}`);
 
@@ -727,8 +704,8 @@ router.get("/verify", async (req, res) => {
         date_created: customer.date_created,
         date_modified: customer.date_modified,
         token: token,
-        wpToken: '', // Not stored, so empty string
-      }
+        wpToken: "", // Not stored, so empty string
+      },
     });
   } catch (error) {
     console.error("Token verification error:", error);
@@ -744,10 +721,8 @@ router.get("/verify", async (req, res) => {
   }
 });
 
-
 /* ======================================== ORDER HISTORY ROUTES ======================================== */
 
- 
 router.get("/orders", async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -763,7 +738,7 @@ router.get("/orders", async (req, res) => {
     const customerId = decoded.userId;
 
     // Get query parameters for pagination and filtering
-    const page = parseInt(req.query.page) || 1; 
+    const page = parseInt(req.query.page) || 1;
     const perPage = parseInt(req.query.per_page) || 10;
     const status = req.query.status; // e.g., 'completed', 'processing', 'pending'
 
@@ -833,7 +808,9 @@ router.get("/orders/:orderId", async (req, res) => {
 
     // Verify that the order belongs to the authenticated user
     if (order.customer_id !== customerId) {
-      return res.status(403).json({ error: "Unauthorized access to this order" });
+      return res
+        .status(403)
+        .json({ error: "Unauthorized access to this order" });
     }
 
     res.json({ order });
