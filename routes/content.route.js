@@ -43,6 +43,60 @@ router.get("/posts", async (req, res) => {
 });
 
 /**
+ * GET /api/posts/:slug
+ * Get a single blog post by slug
+ */
+router.get("/posts/:slug", async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const wpUrl = process.env.WC_SITE_URL;
+
+    const response = await fetch(
+      `${wpUrl}/wp-json/wp/v2/posts?slug=${slug}&_embed`
+    );
+
+    if (!response.ok) {
+      throw new Error(`WordPress API error: ${response.status}`);
+    }
+
+    const posts = await response.json();
+
+    if (!posts || posts.length === 0) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+
+    const post = posts[0];
+
+    const simplifiedPost = {
+      id: post.id,
+      date: post.date,
+      slug: post.slug,
+      link: post.link,
+      title: post.title?.rendered || "",
+      content: post.content?.rendered || "",
+      excerpt: post.excerpt?.rendered || "",
+      og_image: post.yoast_head_json?.og_image || [],
+      author: {
+        name: post._embedded?.author?.[0]?.name || "Unknown",
+        avatar: post._embedded?.author?.[0]?.avatar_urls?.["96"] || null,
+      },
+      categories:
+        post._embedded?.["wp:term"]?.[0]?.map((cat) => cat.name) || [],
+      tags: post._embedded?.["wp:term"]?.[1]?.map((tag) => tag.name) || [],
+    };
+
+    res.json({
+      success: true,
+      message: "Post fetched successfully",
+      post: simplifiedPost,
+    });
+  } catch (err) {
+    console.error("Single post fetch error:", err.message);
+    res.status(500).json({ error: "Failed to fetch post" });
+  }
+});
+
+/**
  * GET /api/clearance
  * Get clearance products
  */
