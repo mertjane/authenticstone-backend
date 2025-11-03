@@ -3,6 +3,43 @@ import { api, handleError, successResponse } from "../server.js";
 
 const router = express.Router();
 
+
+let categoryCache = new Map();
+let cacheTimestamp = 0;
+const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+
+async function getCategoryId(slug) {
+  const now = Date.now();
+  
+  // Clear cache if expired
+  if (now - cacheTimestamp > CACHE_DURATION) {
+    categoryCache.clear();
+    cacheTimestamp = now;
+  }
+  
+  // Return cached ID
+  if (categoryCache.has(slug)) {
+    return categoryCache.get(slug);
+  }
+  
+  // Fetch and cache
+  const categoriesResponse = await api.get("products/categories", {
+    per_page: 100,
+    slug: slug,
+  });
+  
+  if (categoriesResponse.data.length) {
+    const categoryData = {
+      id: categoriesResponse.data[0].id,
+      count: categoriesResponse.data[0].count || 0
+    };
+    categoryCache.set(slug, categoryData);
+    return categoryData;
+  }
+  
+  return null;
+}
+
 /**
  * GET /api/products
  * Fetch products with pagination (9 per page default)
@@ -183,18 +220,15 @@ router.get("/by-category", async (req, res) => {
       return res.status(400).json({ error: "Category parameter is required" });
     }
 
-    // 1. Fetch categories to find the ID from slug
-    const categoriesResponse = await api.get("products/categories", {
-      per_page: 100,
-      slug: category,
-    });
+    // ✅ Use cached category lookup
+    const categoryData = await getCategoryId(category);
 
-    if (!categoriesResponse.data.length) {
+    if (!categoryData) {
       return res.status(404).json({ error: "Category not found" });
     }
 
-    const categoryId = categoriesResponse.data[0].id;
-    const categoryTotalProducts = categoriesResponse.data[0].count || 0;
+    const categoryId = categoryData.id;
+    const categoryTotalProducts = categoryData.count;
 
     // 2. Fetch products filtered by category ID
     const params = {
