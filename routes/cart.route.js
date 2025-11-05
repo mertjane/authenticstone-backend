@@ -187,6 +187,15 @@ router.post("/add-item", async (req, res) => {
     const WC_STORE_URL = process.env.WC_SITE_URL;
     const sessionId = req.headers["x-session-id"];
 
+    // console log the request for adding cart item data
+    console.log("📥 Add item request:", {
+      id,
+      quantity,
+      m2_quantity,
+      variation,
+      sessionId
+    });
+
     // Validate required fields
     if (!id || !quantity) {
       return res.status(400).json({
@@ -205,6 +214,7 @@ router.post("/add-item", async (req, res) => {
 
     // Get stored cookies for this session
     const storedCookies = req.app.locals.cartSessions.get(sessionId);
+    console.log("🍪 Using cookies:", storedCookies ? "Found" : "Not found");
 
     // Calculate m2_quantity from dimensions if not provided
     let calculatedM2 = m2_quantity;
@@ -214,6 +224,7 @@ router.post("/add-item", async (req, res) => {
       const sizeAttr = variation.find(
         (v) =>
           v.attribute === "pa_sizemm" ||
+          v.attribute === "Sizemm" ||
           v.attribute.toLowerCase().includes("size")
       );
 
@@ -225,6 +236,11 @@ router.post("/add-item", async (req, res) => {
           // Calculate m² from mm (width * height / 1,000,000)
           const m2PerTile = (dimensions[0] * dimensions[1]) / 1000000;
           calculatedM2 = m2PerTile * parseInt(quantity);
+          console.log("📐 Calculated m²:", {
+            dimensions: sizeAttr.value,
+            m2PerTile,
+            totalM2: calculatedM2
+          })
         }
       }
     }
@@ -240,6 +256,8 @@ router.post("/add-item", async (req, res) => {
       requestData.variation = variation;
     }
 
+    console.log("📤 Sending to WooCommerce:", requestData);
+
     // Make request to WooCommerce
     const response = await axios.post(
       `${WC_STORE_URL}/wp-json/wc/store/v1/cart/add-item`,
@@ -253,16 +271,27 @@ router.post("/add-item", async (req, res) => {
       }
     );
 
-    // ✅ Update stored cookies if new ones are returned
+    console.log("✅ WooCommerce response:", {
+      items_count: response.data.items_count,
+      items: response.data.items.map(i => ({
+        key: i.key,
+        id: i.id,
+        name: i.name,
+        quantity: i.quantity
+      }))
+    });
+
+    // Update stored cookies if new ones are returned
     const newCookies = response.headers["set-cookie"];
     if (newCookies) {
       const newCookieString = newCookies.join("; ");
-      // ✅ Merge with existing cookies, don't replace
+      // Merge with existing cookies, don't replace
       const existingCookies = storedCookies || "";
       const mergedCookies = existingCookies
         ? `${existingCookies}; ${newCookieString}`
         : newCookieString;
       req.app.locals.cartSessions.set(sessionId, mergedCookies);
+      console.log("Updated cookies");
     }
 
     // If m2_quantity was calculated, include it in response
@@ -279,10 +308,12 @@ router.post("/add-item", async (req, res) => {
 
     res.json(responseData);
   } catch (error) {
-    console.error(
-      "Error adding item to cart:",
-      error.response?.data || error.message
-    );
+    console.error("❌ Error adding item to cart:");
+    console.error("Status:", error.response?.status);
+    console.error("Data:", error.response?.data);
+    console.error("Message:", error.message);
+
+    
     res.status(error.response?.status || 500).json({
       success: false,
       error: error.response?.data?.message || "Failed to add item to cart",
@@ -343,7 +374,7 @@ router.post("/update-item", async (req, res) => {
     // Update stored cookies if new ones are returned
     const newCookies = response.headers["set-cookie"];
     if (newCookies) {
-      req.app.locals.cartSessions.set(sessionId, newCookies.join("; ")); // ✅ Changed
+      req.app.locals.cartSessions.set(sessionId, newCookies.join("; "));
     }
 
     res.json({
@@ -649,7 +680,7 @@ router.post("/process-payment", async (req, res) => {
     const sessionId = req.headers["x-session-id"];
     /*if (sessionId && req.app.locals.cartSessions) {
       req.app.locals.cartSessions.delete(sessionId);
-      console.log("🧹 Cleared cart session after successful payment");
+      console.log("Cleared cart session after successful payment");
     }*/
     if (sessionId) {
       if (req.app.locals.cartSessions) {
